@@ -40,10 +40,11 @@ namespace StreamCompaction {
          * Performs prefix-sum (aka scan) on idata, storing the result into odata.
          */
         void scan(int n, int *odata, const int *idata) {
-			dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 
 			int limit = ilog2ceil(n);
 			int size = pow(2, limit);
+
+			dim3 fullBlocksPerGrid((size + blockSize - 1) / blockSize);
 
 			// allocate memory
 			int* dev_buf;
@@ -58,13 +59,13 @@ namespace StreamCompaction {
 			int d;
 			int offset1;
 			int offset2;
+
 			// UpSweep
-			
 			for (d = 1; d <= limit; d++) {
 				offset1 = pow(2, d - 1);
 				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((size/offset2) + blockSize) / blockSize;
 				kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_buf);
-				cudaDeviceSynchronize();
 			}
 
 			// DownSweep
@@ -72,8 +73,8 @@ namespace StreamCompaction {
 			for (d = limit; d >= 1; d--) {
 				offset1 = pow(2, d - 1);
 				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 				kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_buf);
-				cudaDeviceSynchronize();
 			}
 
 
@@ -105,10 +106,10 @@ namespace StreamCompaction {
 			int* dev_out; // compacted data to output
 			int* dev_in; // input data
 
-			dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
-
 			int limit = ilog2ceil(n);
 			int size = pow(2, limit);
+
+			dim3 fullBlocksPerGrid((size + blockSize - 1) / blockSize);
 
 			// allocate memory
 			cudaMalloc((void**)&dev_in, n * sizeof(int));
@@ -116,52 +117,56 @@ namespace StreamCompaction {
 			cudaMalloc((void**)&dev_out, n * sizeof(int));
 			cudaMalloc((void**)&dev_scan, size * sizeof(int));
 
-			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-			
+			cudaMemset(dev_scan + n, 0, (size - n) * sizeof(int)); // zero extra mem
+			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice); // copy input data
 
             timer().startGpuTimer();
             // map
 			StreamCompaction::Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> >(n, dev_map, dev_in);
-
 			cudaMemcpy(dev_scan, dev_map, n * sizeof(int), cudaMemcpyDeviceToDevice); // copy bool data to scan
-			cudaMemset(dev_scan + n, 0, (size - n) * sizeof(int)); // zero extra mem
 
 			// scan
 
 			int d;
 			int offset1;
 			int offset2;
-			// UpSweep
 
+			// UpSweep
 			for (d = 1; d <= limit; d++) {
 				offset1 = pow(2, d - 1);
 				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 				kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_scan);
-				cudaDeviceSynchronize();
 			}
 
 			// DownSweep
-			cudaMemset(dev_scan + n - 1, 0, (size - n + 1) * sizeof(int)); // zero extra
+			cudaMemset(dev_scan + n - 1, 0, (size - n + 1) * sizeof(int));
 			for (d = limit; d >= 1; d--) {
 				offset1 = pow(2, d - 1);
 				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 				kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_scan);
-				cudaDeviceSynchronize();
 			}
 
 			// scatter
+			fullBlocksPerGrid.x = ((n + blockSize - 1) / blockSize);
 			StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> >(n, dev_out, dev_in, dev_map, dev_scan);
 
             timer().endGpuTimer();
 
 			// copy output to host
 			cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+			// calc # of elements for return
 			int map_val;
 			int r_val;
 			cudaMemcpy(&r_val, dev_scan + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
 			cudaMemcpy(&map_val, dev_map + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
 
 			if (map_val != 0) r_val++;
+
+			// for debugging
+			//printf("Limit: %i, Size: %i, N: %i\n", limit, size, n);
 
 			// cleanup
 			cudaFree(dev_in);
