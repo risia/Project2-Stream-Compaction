@@ -49,10 +49,12 @@ namespace StreamCompaction {
 			// allocate memory
 			int* dev_buf;
 			cudaMalloc((void**)&dev_buf, size * sizeof(int));
+			checkCUDAError("w-e scan malloc fail!");
 
 			// copy input data to device
 			cudaMemset(dev_buf + n, 0, (size - n) * sizeof(int));
 			cudaMemcpy(dev_buf, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+			checkCUDAError("initializing w-e scan data buff fail!");
 
 			timer().startGpuTimer();
 
@@ -66,6 +68,7 @@ namespace StreamCompaction {
 				offset2 = pow(2, d);
 				fullBlocksPerGrid.x = ((size/offset2) + blockSize) / blockSize;
 				kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_buf);
+				checkCUDAError("upsweep fail!");
 			}
 
 			// DownSweep
@@ -75,6 +78,7 @@ namespace StreamCompaction {
 				offset2 = pow(2, d);
 				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 				kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_buf);
+				checkCUDAError("downsweep fail!");
 			}
 
 
@@ -85,6 +89,7 @@ namespace StreamCompaction {
 
 			// copy output data to host
 			cudaMemcpy(odata, dev_buf, n * sizeof(int), cudaMemcpyDeviceToHost);
+			checkCUDAError("copying output data fail!");
 
 			// cleanup
 			cudaFree(dev_buf);
@@ -114,9 +119,11 @@ namespace StreamCompaction {
 			cudaMalloc((void**)&dev_map, n * sizeof(int));
 			cudaMalloc((void**)&dev_out, n * sizeof(int));
 			cudaMalloc((void**)&dev_scan, size * sizeof(int));
+			checkCUDAError("w-e compact malloc fail!");
 
 			cudaMemset(dev_scan + n, 0, (size - n) * sizeof(int)); // zero extra mem
 			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice); // copy input data
+			checkCUDAError("initializing w-e compact data buffs fail!");
 
 			dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 
@@ -124,6 +131,7 @@ namespace StreamCompaction {
             // map
 			StreamCompaction::Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> >(n, dev_map, dev_in);
 			cudaMemcpy(dev_scan, dev_map, n * sizeof(int), cudaMemcpyDeviceToDevice); // copy bool data to scan
+			checkCUDAError("w-e compact bool mapping fail!");
 
 			// scan
 
@@ -137,6 +145,7 @@ namespace StreamCompaction {
 				offset2 = pow(2, d);
 				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 				kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_scan);
+				checkCUDAError("w-e compact upsweep fail!");
 			}
 
 			// DownSweep
@@ -146,24 +155,28 @@ namespace StreamCompaction {
 				offset2 = pow(2, d);
 				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 				kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_scan);
+				checkCUDAError("w-e compact downsweep fail!");
 			}
 
 			// scatter
 			fullBlocksPerGrid.x = ((n + blockSize - 1) / blockSize);
 			StreamCompaction::Common::kernScatter << <fullBlocksPerGrid, blockSize >> >(n, dev_out, dev_in, dev_map, dev_scan);
+			checkCUDAError("w-e compact scatter fail!");
 
             timer().endGpuTimer();
 
 			// copy output to host
 			cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
+			checkCUDAError("w-e compact output copy fail!");
 
 			// calc # of elements for return
 			int map_val;
 			int r_val;
 			cudaMemcpy(&r_val, dev_scan + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
 			cudaMemcpy(&map_val, dev_map + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+			checkCUDAError("w-e compact calc # elem fail!");
 
-			if (map_val != 0) r_val++;
+			r_val += map_val;
 
 			// for debugging
 			//printf("Limit: %i, Size: %i, N: %i\n", limit, size, n);

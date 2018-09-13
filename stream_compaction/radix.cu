@@ -62,6 +62,43 @@ namespace StreamCompaction {
 			Performs Radix Sort on input data using Work-Efficient Scan
 		*/
 
+		int max(int n, int *idata) {
+			int limit = ilog2ceil(n);
+			int size = pow(2, limit);
+
+			dim3 fullBlocksPerGrid((size + blockSize - 1) / blockSize);
+
+			int d;
+			int offset1;
+			int offset2;
+
+			int max;
+			int *max_arr;
+			cudaMalloc((void**)&max_arr, size * sizeof(int));
+			cudaMemcpy(max_arr, idata, n * sizeof(int), cudaMemcpyHostToDevice);
+			cudaMemset(max_arr + n, 0, (size - n) * sizeof(int));
+
+			timer().startGpuTimer();
+
+			// find max of data
+			for (d = 1; d <= limit; d++) {
+				offset1 = pow(2, d - 1);
+				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
+				kernFindMax << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, max_arr);
+				checkCUDAError("Radix find max fail!");
+			}
+
+			timer().endGpuTimer();
+
+			cudaMemcpy(&max, max_arr + size - 1, sizeof(int), cudaMemcpyDeviceToHost);
+			
+			cudaFree(max_arr);
+			return max;
+
+
+		}
+
 		void sort(int n, int *odata, const int *idata) {
 
 			int limit = ilog2ceil(n);
@@ -75,6 +112,8 @@ namespace StreamCompaction {
 
 			int max;
 			int totFalse;
+
+			int temp;
 			
 			// alloc. memory
 			int *b_arr;
@@ -85,6 +124,8 @@ namespace StreamCompaction {
 			int *dev_in;
 			int *dev_out;
 
+			int *swap;
+
 			cudaMalloc((void**)&b_arr, n * sizeof(int));
 			//cudaMalloc((void**)&e_arr, n * sizeof(int));
 			cudaMalloc((void**)&f_arr, size * sizeof(int)); // sized to power of 2 for scan
@@ -93,26 +134,51 @@ namespace StreamCompaction {
 			cudaMalloc((void**)&dev_in, n * sizeof(int));
 			cudaMalloc((void**)&dev_out, n * sizeof(int));
 
+			//debug
+			//printf("Malloced\n");
+
 			// copy input
 			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
-
+			cudaMemcpy(f_arr, dev_in, n * sizeof(int), cudaMemcpyDeviceToDevice);
 			cudaMemset(f_arr + n, 0, (size - n) * sizeof(int));
+			checkCUDAError("Radix mem init fail!");
+
+			//debug
+			//printf("Input copied\n");
+
+			timer().startGpuTimer();
 
 			// find max of data
 			for (d = 1; d <= limit; d++) {
 				offset1 = pow(2, d - 1);
 				offset2 = pow(2, d);
 				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
-				kernFindMax << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_out);
+				kernFindMax << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, f_arr);
+				checkCUDAError("Radix find max fail!");
 			}
 
-			max = dev_out[size - 1]; // save max to calc. number of passes
+			// copy max value
+			cudaMemcpy(&max, f_arr + size - 1, sizeof(int), cudaMemcpyDeviceToHost);
+			// zero extra mem
+			cudaMemset(f_arr + n, 0, (size - n) * sizeof(int));
+
+			//debug
+			//printf("Max: %i\n", max);
 
 			for (int k = 0; k < ilog2ceil(max); k++) {
+				//debug
+				//printf("Pass %i\n", k+1);
+
 				// map arrays b & e
 				fullBlocksPerGrid.x = ((n + blockSize - 1) / blockSize);
 				kernBoolMaps << <fullBlocksPerGrid, blockSize >> > (n, k, dev_in, b_arr, f_arr);
-				totFalse = f_arr[n - 1];
+				checkCUDAError("Radix bool maps fail!");
+
+				// get whether last number's bit is false
+				cudaMemcpy(&totFalse, f_arr + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+
+				//debug
+				//printf("bools mapped\n");
 				
 				// exclusive scan e_arr into f_arr
 
@@ -122,6 +188,7 @@ namespace StreamCompaction {
 					offset2 = pow(2, d);
 					fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 					StreamCompaction::Efficient::kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, f_arr);
+					checkCUDAError("Radix upsweep fail!");
 				}
 
 				// DownSweep
@@ -131,21 +198,49 @@ namespace StreamCompaction {
 					offset2 = pow(2, d);
 					fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
 					StreamCompaction::Efficient::kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, f_arr);
+					checkCUDAError("Radix downsweep fail!");
 				}
 
+				//debug
+				//printf("scanned\n");
+
 				// total Falses
-				totFalse += f_arr[n - 1];
+				cudaMemcpy(&temp, f_arr + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
+				totFalse += temp;
+
+				//debug
+				//printf("totFalse = %i\n", totFalse);
+
 
 				// Compute t_arr
 				fullBlocksPerGrid.x = ((n + blockSize - 1) / blockSize);
 				kernComputeT << <fullBlocksPerGrid, blockSize >> >(n, totFalse, t_arr, f_arr);
+				checkCUDAError("Radix t_arr compute fail!");
+
+				//debug
+				//printf("t_arr computed\n");
 
 				// scatter
 				kernRadixScatter << <fullBlocksPerGrid, blockSize >> >(n, dev_out, dev_in, b_arr, f_arr, t_arr);
+				checkCUDAError("Radix scatter fail!");
+
+				swap = dev_out;
+				dev_out = dev_in;
+				dev_in = swap;
+
+				//debug
+				//printf("scattered\n");
 
 			}
+
+			timer().endGpuTimer();
+
 			// copy output data to host
-			cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
+			cudaMemcpy(odata, dev_in, n * sizeof(int), cudaMemcpyDeviceToHost);
+			checkCUDAError("Radix output copy fail!");
+
+			//debug
+			//printf("output copied\n");
 
 			// cleanup
 			cudaFree(dev_in);
@@ -153,6 +248,9 @@ namespace StreamCompaction {
 			cudaFree(b_arr);
 			cudaFree(f_arr);
 			cudaFree(t_arr);
+
+			//debug
+			//printf("complete\n");
 
 
 		}

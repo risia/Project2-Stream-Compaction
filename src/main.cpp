@@ -11,6 +11,7 @@
 #include <stream_compaction/naive.h>
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
+#include <stream_compaction/radix.h>
 #include "testing_helpers.hpp"
 
 const int SIZE = 1 << 8; // feel free to change the size of array
@@ -94,6 +95,31 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(NPOT, c, true);
     printCmpResult(NPOT, b, c);
+
+	zeroArray(SIZE, c);
+	printDesc("Find max, power-of-two");
+	int max = StreamCompaction::Radix::max(SIZE, a);
+	printf("max = %i\n", max);
+
+	zeroArray(SIZE, c);
+	printDesc("Find max, non-power-of-two");
+	max = StreamCompaction::Radix::max(NPOT, a);
+	printf("max = %i\n", max);
+
+	zeroArray(SIZE, c);
+	int radix_tst[8] = { 4, 7, 2, 6, 3, 5, 1, 0 };
+	printDesc("Radix sort, power-of-two");
+	StreamCompaction::Radix::sort(8, c, radix_tst);
+	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	printArray(8, c, true);
+
+	zeroArray(SIZE, c);
+	printDesc("Radix sort, non-power-of-two");
+	StreamCompaction::Radix::sort(7, c, radix_tst);
+	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	printArray(7, c, true);
+
+
 
     printf("\n");
     printf("*****************************\n");

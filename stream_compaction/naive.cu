@@ -41,10 +41,12 @@ namespace StreamCompaction {
 
 			cudaMalloc((void**)&dev_out, n * sizeof(int));
 			cudaMalloc((void**)&dev_in, n * sizeof(int));
+			checkCUDAError("naive scan malloc fail!");
 
 			// copy input data to device
 			cudaMemset(dev_in, 0, sizeof(int));
 			cudaMemcpy(dev_in + 1, idata, (n - 1) * sizeof(int), cudaMemcpyHostToDevice);
+			checkCUDAError("naive input copy fail!");
 
             timer().startGpuTimer();
 
@@ -53,7 +55,7 @@ namespace StreamCompaction {
 			for (d = 1; d <= ilog2ceil(n); d++) {
 				offset = pow(2, d - 1);
 				kernScanDataNaive<<<fullBlocksPerGrid, blockSize>>>(n, offset, dev_out, dev_in);
-
+				checkCUDAError("naive scan iteration fail!");
 				// swap buffers
 				swap = dev_in;
 				dev_in = dev_out;
@@ -65,6 +67,7 @@ namespace StreamCompaction {
 
 			// copy output data to host
 			cudaMemcpy(odata, dev_in, n * sizeof(int), cudaMemcpyDeviceToHost);
+			checkCUDAError("naive copy output fail!");
 
 			// cleanup
 			cudaFree(dev_in);
