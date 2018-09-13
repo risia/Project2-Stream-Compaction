@@ -112,7 +112,6 @@ namespace StreamCompaction {
 
 			int max;
 			int totFalse;
-
 			int temp;
 			
 			// alloc. memory
@@ -134,17 +133,11 @@ namespace StreamCompaction {
 			cudaMalloc((void**)&dev_in, n * sizeof(int));
 			cudaMalloc((void**)&dev_out, n * sizeof(int));
 
-			//debug
-			//printf("Malloced\n");
-
 			// copy input
 			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
 			cudaMemcpy(f_arr, dev_in, n * sizeof(int), cudaMemcpyDeviceToDevice);
 			cudaMemset(f_arr + n, 0, (size - n) * sizeof(int));
 			checkCUDAError("Radix mem init fail!");
-
-			//debug
-			//printf("Input copied\n");
 
 			timer().startGpuTimer();
 
@@ -162,12 +155,7 @@ namespace StreamCompaction {
 			// zero extra mem
 			cudaMemset(f_arr + n, 0, (size - n) * sizeof(int));
 
-			//debug
-			//printf("Max: %i\n", max);
-
 			for (int k = 0; k < ilog2ceil(max); k++) {
-				//debug
-				//printf("Pass %i\n", k+1);
 
 				// map arrays b & e
 				fullBlocksPerGrid.x = ((n + blockSize - 1) / blockSize);
@@ -176,9 +164,6 @@ namespace StreamCompaction {
 
 				// get whether last number's bit is false
 				cudaMemcpy(&totFalse, f_arr + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
-
-				//debug
-				//printf("bools mapped\n");
 				
 				// exclusive scan e_arr into f_arr
 
@@ -201,24 +186,14 @@ namespace StreamCompaction {
 					checkCUDAError("Radix downsweep fail!");
 				}
 
-				//debug
-				//printf("scanned\n");
-
 				// total Falses
 				cudaMemcpy(&temp, f_arr + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
 				totFalse += temp;
-
-				//debug
-				//printf("totFalse = %i\n", totFalse);
-
 
 				// Compute t_arr
 				fullBlocksPerGrid.x = ((n + blockSize - 1) / blockSize);
 				kernComputeT << <fullBlocksPerGrid, blockSize >> >(n, totFalse, t_arr, f_arr);
 				checkCUDAError("Radix t_arr compute fail!");
-
-				//debug
-				//printf("t_arr computed\n");
 
 				// scatter
 				kernRadixScatter << <fullBlocksPerGrid, blockSize >> >(n, dev_out, dev_in, b_arr, f_arr, t_arr);
@@ -227,10 +202,6 @@ namespace StreamCompaction {
 				swap = dev_out;
 				dev_out = dev_in;
 				dev_in = swap;
-
-				//debug
-				//printf("scattered\n");
-
 			}
 
 			timer().endGpuTimer();
@@ -239,20 +210,12 @@ namespace StreamCompaction {
 			cudaMemcpy(odata, dev_in, n * sizeof(int), cudaMemcpyDeviceToHost);
 			checkCUDAError("Radix output copy fail!");
 
-			//debug
-			//printf("output copied\n");
-
 			// cleanup
 			cudaFree(dev_in);
 			cudaFree(dev_out);
 			cudaFree(b_arr);
 			cudaFree(f_arr);
 			cudaFree(t_arr);
-
-			//debug
-			//printf("complete\n");
-
-
 		}
 
 	}

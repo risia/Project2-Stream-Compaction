@@ -84,9 +84,6 @@ namespace StreamCompaction {
 
 			timer().endGpuTimer();
 
-			// for debugging
-			//printf("Limit: %i, Size: %i, N: %i\n", limit, size, n);
-
 			// copy output data to host
 			cudaMemcpy(odata, dev_buf, n * sizeof(int), cudaMemcpyDeviceToHost);
 			checkCUDAError("copying output data fail!");
@@ -177,9 +174,6 @@ namespace StreamCompaction {
 			checkCUDAError("w-e compact calc # elem fail!");
 
 			r_val += map_val;
-
-			// for debugging
-			//printf("Limit: %i, Size: %i, N: %i\n", limit, size, n);
 
 			// cleanup
 			cudaFree(dev_in);
