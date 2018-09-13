@@ -137,6 +137,14 @@ int main(int argc, char* argv[]) {
 	StreamCompaction::SharedMem::scan(SIZE, c, a);
 	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	printArray(SIZE, c, true);
+	printCmpResult(SIZE, b, c);
+
+	zeroArray(SIZE, c);
+	printDesc("Shared Memory Efficient Sort, non-power-of-two");
+	StreamCompaction::SharedMem::scan(NPOT, c, a);
+	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	printArray(NPOT, c, true);
+	printCmpResult(NPOT, b, c);
 
     printf("\n");
     printf("*****************************\n");
@@ -189,6 +197,20 @@ int main(int argc, char* argv[]) {
     printElapsedTime(StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
     //printArray(count, c, true);
     printCmpLenResult(count, expectedNPOT, b, c);
+
+	zeroArray(SIZE, c);
+	printDesc("Shared Memory work-efficient compact, power-of-two");
+	count = StreamCompaction::SharedMem::compact(SIZE, c, a);
+	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	//printArray(count, c, true);
+	printCmpLenResult(count, expectedCount, b, c);
+
+	zeroArray(SIZE, c);
+	printDesc("Shared Memory work-efficient compact, non-power-of-two");
+	count = StreamCompaction::SharedMem::compact(NPOT, c, a);
+	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	//printArray(count, c, true);
+	printCmpLenResult(count, expectedNPOT, b, c);
 
     system("pause"); // stop Win32 console from closing on exit
 	delete[] a;
