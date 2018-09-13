@@ -28,27 +28,31 @@ namespace StreamCompaction {
 			int index = (blockDim.x * blockIdx.x) + tx;
 
 			// copy used vals to shared mem
-			sBuf[tx] = (index < n) ? in[index] : 0;
+			sBuf[tx + CONFLICT_FREE_OFFSET(tx)] = (index < n) ? in[index] : 0;
 
 			__syncthreads(); // avoid mem issues
 
 			int offset; // step size
 			int access; // shared buffer access index
+			int a2;
 
 			// Upsweep
 			for (offset = 1; offset < blockSize; offset *=2) {
 				access = (2 * offset * (tx + 1)) - 1;
-				if (access < blockSize) sBuf[access] += sBuf[access - offset];
+				a2 = access - offset;
+				a2 += CONFLICT_FREE_OFFSET(a2);
+				access += CONFLICT_FREE_OFFSET(access);
+				if (access < blockSize) sBuf[access] += sBuf[a2];
 				__syncthreads(); // avoid mem issues
 			}
 
 			// prepare array for downsweep
-			if (tx == blockSize - 1) {
+			if (tx == blockSize - 1 + CONFLICT_FREE_OFFSET(blockSize - 1)) {
 				sums[blockIdx.x] = sBuf[tx];
 				sBuf[tx] = 0;
 			}
 			__syncthreads();
-			if (index >= n - 1) sBuf[tx] = 0;
+			if (index >= n - 1) sBuf[tx + CONFLICT_FREE_OFFSET(tx)] = 0;
 			__syncthreads(); // avoid mem issues
 
 			// Downsweep (inclusive)
@@ -57,9 +61,12 @@ namespace StreamCompaction {
 
 			for (offset = blockSize; offset >= 1; offset /= 2) {
 				access = (2 * offset * (tx + 1)) - 1;
+				a2 = access - offset;
+				a2 += CONFLICT_FREE_OFFSET(a2);
+				access += CONFLICT_FREE_OFFSET(access);
 				if (access < blockSize) {
-					temp = sBuf[access - offset]; // store left child
-					sBuf[access - offset] = sBuf[access]; // swap
+					temp = sBuf[a2]; // store left child
+					sBuf[a2] = sBuf[access]; // swap
 					sBuf[access] += temp; // add
 				}
 				__syncthreads(); // avoid mem issues
@@ -67,7 +74,7 @@ namespace StreamCompaction {
 			
 			// write to dev memory
 			if (index < n) {
-				out[index] = sBuf[tx];
+				out[index] = sBuf[tx + CONFLICT_FREE_OFFSET(tx)];
 			}
 		}
 
@@ -80,7 +87,6 @@ namespace StreamCompaction {
 			for (int i = 0; i < bx; i++) {
 				in[index] += sums[i];
 			}
-
 		}
 
         /**
