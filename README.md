@@ -75,5 +75,5 @@ __global__ void kernRadixScatter(int n, int *out, int *in, int *b_arr, int *f_ar
 }
 ```
 
-Once the input array has been sorted for each bit, the output is correctly sorted in order of ascending value. This implementation is intended to work on integer values. An example of a small array radix sort is depicted:
+Once the input array has been sorted for each bit, the output is correctly sorted in order of ascending value. This implementation is intended to work on integer values, and currently operates on global device memory, bottlenecking performance. An example of a small array radix sort is depicted:
 ![Radix Sort Example](/img/radix_example.PNG)
