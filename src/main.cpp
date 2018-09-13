@@ -121,7 +121,15 @@ int main(int argc, char* argv[]) {
 	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	printArray(NPOT, c, true);
 
-
+	zeroArray(SIZE, c);
+	int radix_tst[8] = { 4, 7, 2, 6, 3, 5, 1, 0 };
+	printDesc("Radix example sort");
+	printf("Test input array:\n");
+	printArray(8, radix_tst, true);
+	StreamCompaction::Radix::sort(8, c, radix_tst);
+	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	printf("Sorted Output:\n");
+	printArray(8, c, true);
 
     printf("\n");
     printf("*****************************\n");

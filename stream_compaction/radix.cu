@@ -40,7 +40,7 @@ namespace StreamCompaction {
 			int fBit = flipBit(bit);
 
 			b_arr[index] = bit; // maps bit k in b_arr
-			f_arr[index] = fBit; // copy same value here for scan
+			f_arr[index] = fBit; // copy flipped value here for scan
 		}
 
 		__global__ void kernComputeT(int n, int totFalse, int *t_arr, int *f_arr) {
@@ -165,7 +165,7 @@ namespace StreamCompaction {
 				// get whether last number's bit is false
 				cudaMemcpy(&totFalse, f_arr + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
 				
-				// exclusive scan e_arr into f_arr
+				// exclusive scan f_arr
 
 				// UpSweep
 				for (d = 1; d <= limit; d++) {
