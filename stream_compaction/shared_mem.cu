@@ -174,8 +174,6 @@ namespace StreamCompaction {
 			cudaMemcpy(&map_val, dev_map + n - 1, sizeof(int), cudaMemcpyDeviceToHost);
 			checkCUDAError("shared mem compact calc # elem fail!");
 
-			printf("map[n-1] = %i, scan[n-1] = %i\n", map_val, r_val);
-
 			r_val += map_val;
 
 			// cleanup
