@@ -6,7 +6,13 @@ CUDA Stream Compaction
 * Angelina Risi
   * [LinkedIn](www.linkedin.com/in/angelina-risi)
 * Tested on: Windows 10, i7-6700HQ @ 2.60GHz 8GB, GTX 960M 4096MB (Personal Laptop)
+
+## Project Description  
   
+This project implements a variety of scan, compact and sort algorithms on the GPU with some comparison tests implemented on the CPU. The base requirements were to implement CPU Scan and Compact Functions, and to implement GPU Naive Scan and Compact and GPU Work-Efficient Scan and Compact. I also created a wrapper function for the Thrust scan implementation on the GPU.
+In addition to these base requirements, I implemented all the defined extra credit assignments. These were Radix sort, using shared GPU memory in the scan implementation, implementing memory bank conflict avoidance, and improving the work-efficient implementation's efficiency over the CPU implementation.  
+  
+### Features
   
 ## Extra Credit
 
@@ -102,3 +108,7 @@ __global__ void kernStitch(int n, int* in, int* sums) {
 #### Bank Conflict Avoidance  
   
 This algorithm is further improved by using offsets on the shared memory access iterators to reduce bank conflicts, events where multiple threads attempt to access a region of shared memory at the same time and thus must wait for the bus to become free. This is done by applying macros to calculate the offset on the index based on the assumed number of memory banks. These are taken from the example code in GPU Gems 3 Ch. 39 linked in the instructions.
+  
+  
+## Performance Analysis  
+
