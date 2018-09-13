@@ -99,11 +99,13 @@ int main(int argc, char* argv[]) {
 	zeroArray(SIZE, c);
 	printDesc("Find max, power-of-two");
 	int max = StreamCompaction::Radix::max(SIZE, a);
+	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	printf("max = %i\n", max);
 
 	zeroArray(SIZE, c);
 	printDesc("Find max, non-power-of-two");
 	max = StreamCompaction::Radix::max(NPOT, a);
+	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	printf("max = %i\n", max);
 
 	zeroArray(SIZE, c);
