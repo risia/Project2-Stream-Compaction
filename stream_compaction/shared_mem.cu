@@ -157,11 +157,6 @@ namespace StreamCompaction {
 			cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
 			checkCUDAError("shared mem scan output copy fail!");
 
-			for (int i = 0; i < num_blocks; i += 16) {
-				cudaMemcpy(&x, dev_sums + i, sizeof(int), cudaMemcpyDeviceToHost);
-				printf("Sum %i: %i\n", i, x);
-			}
-
 			cudaFree(dev_out);
 			cudaFree(dev_in);
 			cudaFree(dev_sums);
