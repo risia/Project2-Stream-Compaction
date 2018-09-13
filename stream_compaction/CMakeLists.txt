@@ -11,6 +11,8 @@ set(SOURCE_FILES
     "thrust.cu"
     "radix.h"
     "radix.cu"
+	"shared_mem.h"
+	"shared_mem.cu"
     )
 
 cuda_add_library(stream_compaction

@@ -12,6 +12,7 @@
 #include <stream_compaction/efficient.h>
 #include <stream_compaction/thrust.h>
 #include <stream_compaction/radix.h>
+#include <stream_compaction/shared_mem.h>
 #include "testing_helpers.hpp"
 
 const int SIZE = 1 << 8; // feel free to change the size of array
@@ -130,6 +131,12 @@ int main(int argc, char* argv[]) {
 	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	printf("Sorted Output:\n");
 	printArray(8, c, true);
+
+	zeroArray(SIZE, c);
+	printDesc("Shared Memory Efficient Sort, power-of-two");
+	StreamCompaction::SharedMem::scan(SIZE, c, a);
+	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	printArray(SIZE, c, true);
 
     printf("\n");
     printf("*****************************\n");

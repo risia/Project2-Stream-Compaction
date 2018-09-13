@@ -21,9 +21,9 @@ namespace StreamCompaction {
 			if (access >= n || n < 1 || access < 0) return;
 
 			buff[access] += buff[access - offset1];
-			
-
 		}
+
+
 		__global__ void kernScanDataDownSweep(int n, int offset1, int offset2, int* buff) {
 			int index = (blockDim.x * blockIdx.x) + threadIdx.x;
 
@@ -33,7 +33,6 @@ namespace StreamCompaction {
 			int temp = buff[access - offset1];
 			buff[access - offset1] = buff[access];
 			buff[access] += temp;
-
 		}
 
         /**
