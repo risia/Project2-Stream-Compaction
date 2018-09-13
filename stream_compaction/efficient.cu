@@ -109,8 +109,6 @@ namespace StreamCompaction {
 			int limit = ilog2ceil(n);
 			int size = pow(2, limit);
 
-			dim3 fullBlocksPerGrid((size + blockSize - 1) / blockSize);
-
 			// allocate memory
 			cudaMalloc((void**)&dev_in, n * sizeof(int));
 			cudaMalloc((void**)&dev_map, n * sizeof(int));
@@ -119,6 +117,8 @@ namespace StreamCompaction {
 
 			cudaMemset(dev_scan + n, 0, (size - n) * sizeof(int)); // zero extra mem
 			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice); // copy input data
+
+			dim3 fullBlocksPerGrid((n + blockSize - 1) / blockSize);
 
             timer().startGpuTimer();
             // map
