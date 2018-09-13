@@ -99,4 +99,6 @@ __global__ void kernStitch(int n, int* in, int* sums) {
    }
 }
 ```  
-
+#### Bank Conflict Avoidance  
+  
+This algorithm is further improved by using offsets on the shared memory access iterators to reduce bank conflicts, events where multiple threads attempt to access a region of shared memory at the same time and thus must wait for the bus to become free. This is done by applying macros to calculate the offset on the index based on the assumed number of memory banks. These are taken from the example code in GPU Gems 3 Ch. 39 linked in the instructions.
