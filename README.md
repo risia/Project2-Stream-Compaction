@@ -83,5 +83,20 @@ Once the input array has been sorted for each bit, the output is correctly sorte
 ### Shared Memory Work-Efficient Scan & Compact
   
 An alternative implementation of the work-efficient scan using shared memory to reduce latency is included. Each block stores an array shared among its threads to store the intermediate values before outputting. By reducing global memory accesses and instead using faster shared memory, we can potentially increase thoroughput.   
-Both the upsweep and downsweep are done in the same kernel as they need to both used the shared memory cache. This means we cannot dynamically change the block and threadcount as we traverse the tree as done in the global memory solution, and we must be careful to synchronize threads between write and read operations to prevent race conditions.   
-To allow the merging of the blocks' solutions, while we calculate an exclusive scan through the downsweep, we save the root value of the tree in the index blockSize of the shared memory array. The blocks must add the root value of all previous blocks to their total to calculate the correct prefix sum values of the array.  
+Both the upsweep and downsweep are done in the same kernel as they need to both used the shared memory cache. This means we cannot dynamically change the block and threadcount as we traverse the tree as done in the global memory solution, and we must be careful to synchronize threads between write and read operations to prevent race conditions. Each block essentially performs a scan on a portion of the input data.  
+To allow the merging of the blocks' solutions, while we calculate an exclusive scan through the downsweep, we save the root value of the tree in the index blockSize of the shared memory array. 
+The blocks must add the root value of all previous blocks to their total to calculate the correct prefix sum values of the array. A second kernel call to do this to stitch together the blocks into the full exclusive scan is used to ensure all blocks have written their data to the device output buffers before attempting to fetch it.  
+  
+```cpp
+__global__ void kernStitch(int n, int* in, int* sums) {
+   int bx = blockIdx.x;
+   int index = (blockDim.x * bx) + threadIdx.x;;
+
+   if (bx == 0) return;
+   if (index >= n) return;
+   for (int i = 0; i < bx; i++) {
+      in[index] += sums[i];
+   }
+}
+```  
+
