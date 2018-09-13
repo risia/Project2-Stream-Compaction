@@ -20,40 +20,6 @@ namespace StreamCompaction {
             static PerformanceTimer timer;
             return timer;
         }
-		__global__ void kernScanBlockSum(int n, int* sum_buf) {
-
-			int index = (blockDim.x * blockIdx.x) + threadIdx.x;
-
-			int offset;
-			int access;
-			int a2;
-
-			int temp;
-
-			// Upsweep
-			for (offset = 1; offset < blockSize; offset *= 2) {
-				access = (2 * offset * (index + 1)) - 1;
-				a2 = access - offset;
-				if (access < blockSize) sum_buf[access] += sum_buf[a2];
-				__syncthreads(); // avoid mem issues
-			}
-			if (index >= n - 1) sum_buf[index] = 0;
-			__syncthreads(); // avoid mem issues
-
-			//downsweep
-			for (offset = blockSize; offset >= 1; offset /= 2) {
-				access = (2 * offset * (index + 1)) - 1;
-				a2 = access - offset;
-				if (access < blockSize) {
-					temp = sum_buf[a2]; // store left child
-					sum_buf[a2] = sum_buf[access]; // swap
-					sum_buf[access] += temp; // add
-				}
-				__syncthreads(); // avoid mem issues
-			}
-
-		}
-
 		__global__ void kernScanDataShared(int n, int* in, int* out, int* sums) {
 			// init shared mem for block, could improve latency
 			__shared__ int sBuf[blockSize];
@@ -128,25 +94,21 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
 
-			int mod = n % blockSize;
-			int size = n;
-
-			if (mod != 0) size+= blockSize - mod;
-
-			int num_blocks = size / blockSize;
+			int num_blocks = 1 + (n - 1)/ blockSize;
+			int limit = ilog2ceil(num_blocks);
+			int sum_size = pow(2, limit);
 
 			dim3 fullBlocksPerGrid(num_blocks);
 
 			int* dev_out; // data to output
 			int* dev_in; // input data
-
-			int* dev_sums;
+			int* dev_sums; // sums, from first blockwise scan
 
 			int x;
 
 			cudaMalloc((void**)&dev_in, n * sizeof(int));
 			cudaMalloc((void**)&dev_out, n * sizeof(int));
-			cudaMalloc((void**)&dev_sums, num_blocks * sizeof(int));
+			cudaMalloc((void**)&dev_sums, sum_size * sizeof(int));
 
 			// copy input data to device
 			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice);
@@ -160,12 +122,29 @@ namespace StreamCompaction {
 			kernScanDataShared<<<fullBlocksPerGrid, blockSize>>>(n, dev_in, dev_out, dev_sums);
 			checkCUDAError("shared mem scan fail!");
 
-			
+			// scan block sums
+			int d;
+			int offset1;
+			int offset2;
 
-			fullBlocksPerGrid.x = (num_blocks + blockSize - 1) / blockSize;
-			// scan sums from blocks
-			kernScanBlockSum << <fullBlocksPerGrid, blockSize >> >(num_blocks, dev_sums);
-			checkCUDAError("shared mem block scan fail!");
+			// UpSweep
+			for (d = 1; d <= limit; d++) {
+				offset1 = pow(2, d - 1);
+				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((sum_size / offset2) + blockSize) / blockSize;
+				StreamCompaction::Efficient::kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(sum_size, offset1, offset2, dev_sums);
+				checkCUDAError("w-e compact upsweep fail!");
+			}
+
+			// DownSweep
+			cudaMemset(dev_sums + num_blocks - 1, 0, (sum_size - num_blocks + 1) * sizeof(int));
+			for (d = limit; d >= 1; d--) {
+				offset1 = pow(2, d - 1);
+				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((sum_size / offset2) + blockSize) / blockSize;
+				StreamCompaction::Efficient::kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(sum_size, offset1, offset2, dev_sums);
+				checkCUDAError("w-e compact downsweep fail!");
+			}
 
 			fullBlocksPerGrid.x = num_blocks;
 			kernStitch << <fullBlocksPerGrid, blockSize >> >(n, dev_out, dev_sums);
@@ -178,7 +157,7 @@ namespace StreamCompaction {
 			cudaMemcpy(odata, dev_out, n * sizeof(int), cudaMemcpyDeviceToHost);
 			checkCUDAError("shared mem scan output copy fail!");
 
-			for (int i = 0; i < num_blocks; i++) {
+			for (int i = 0; i < num_blocks; i += 16) {
 				cudaMemcpy(&x, dev_sums + i, sizeof(int), cudaMemcpyDeviceToHost);
 				printf("Sum %i: %i\n", i, x);
 			}
@@ -206,11 +185,9 @@ namespace StreamCompaction {
 
 			int* dev_sums;
 
-			int mod = n % blockSize;
-			int size = n;
-			if (mod != 0) size += blockSize - mod;
-
-			int num_blocks = size / blockSize;
+			int num_blocks = 1 + (n - 1) / blockSize;
+			int limit = ilog2ceil(num_blocks);
+			int sum_size = pow(2, limit);
 
 			dim3 fullBlocksPerGrid(num_blocks);
 
@@ -220,7 +197,7 @@ namespace StreamCompaction {
 			cudaMalloc((void**)&dev_out, n * sizeof(int));
 			cudaMalloc((void**)&dev_scan, n * sizeof(int));
 
-			cudaMalloc((void**)&dev_sums, num_blocks * sizeof(int));
+			cudaMalloc((void**)&dev_sums, sum_size * sizeof(int));
 			checkCUDAError("shared mem compact malloc fail!");
 
 			cudaMemset(dev_scan, 0, n * sizeof(int));
@@ -229,13 +206,11 @@ namespace StreamCompaction {
 			cudaMemcpy(dev_in, idata, n * sizeof(int), cudaMemcpyHostToDevice); // copy input data
 			checkCUDAError("initializing w-e compact data buffs fail!");
 
-			
-
             timer().startGpuTimer();
             // map
 			fullBlocksPerGrid.x = ((n + blockSize - 1) / blockSize);
 			StreamCompaction::Common::kernMapToBoolean << <fullBlocksPerGrid, blockSize >> >(n, dev_map, dev_in);
-			checkCUDAError("w-e compact bool mapping fail!");
+			checkCUDAError("shared mem compact bool mapping fail!");
 
 			// scan the map
 			fullBlocksPerGrid.x = num_blocks;
@@ -245,10 +220,29 @@ namespace StreamCompaction {
 			int r_val;
 			cudaMemcpy(&r_val, dev_sums + num_blocks - 1, sizeof(int), cudaMemcpyDeviceToHost);
 
-			fullBlocksPerGrid.x = (num_blocks + blockSize - 1) / blockSize;
 			// scan sums from blocks
-			kernScanBlockSum << <fullBlocksPerGrid, blockSize >> >(num_blocks, dev_sums);
-			checkCUDAError("shared mem block scan fail!");
+			int d;
+			int offset1;
+			int offset2;
+
+			// UpSweep
+			for (d = 1; d <= limit; d++) {
+				offset1 = pow(2, d - 1);
+				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((sum_size / offset2) + blockSize) / blockSize;
+				StreamCompaction::Efficient::kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(sum_size, offset1, offset2, dev_sums);
+				checkCUDAError("w-e compact upsweep fail!");
+			}
+
+			// DownSweep
+			cudaMemset(dev_sums + num_blocks - 1, 0, (sum_size - num_blocks + 1) * sizeof(int));
+			for (d = limit; d >= 1; d--) {
+				offset1 = pow(2, d - 1);
+				offset2 = pow(2, d);
+				fullBlocksPerGrid.x = ((sum_size / offset2) + blockSize) / blockSize;
+				StreamCompaction::Efficient::kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(sum_size, offset1, offset2, dev_sums);
+				checkCUDAError("w-e compact downsweep fail!");
+			}
 
 			fullBlocksPerGrid.x = num_blocks;
 			kernStitch << <fullBlocksPerGrid, blockSize >> >(n, dev_scan, dev_sums);
