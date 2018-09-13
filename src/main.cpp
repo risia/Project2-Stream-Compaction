@@ -15,7 +15,7 @@
 #include <stream_compaction/shared_mem.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1 << 8; // feel free to change the size of array
+const int SIZE = 1 << 12; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -133,18 +133,30 @@ int main(int argc, char* argv[]) {
 	printArray(8, c, true);
 
 	zeroArray(SIZE, c);
-	printDesc("Shared Memory Efficient Sort, power-of-two");
+	printDesc("Shared Memory Efficient Scan, power-of-two");
 	StreamCompaction::SharedMem::scan(SIZE, c, a);
 	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	printArray(SIZE, c, true);
 	printCmpResult(SIZE, b, c);
 
 	zeroArray(SIZE, c);
-	printDesc("Shared Memory Efficient Sort, non-power-of-two");
+	printDesc("Shared Memory Efficient Scan, non-power-of-two");
 	StreamCompaction::SharedMem::scan(NPOT, c, a);
 	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	printArray(NPOT, c, true);
 	printCmpResult(NPOT, b, c);
+
+	//zeroArray(SIZE, c);
+	//printDesc("Shared Memory Efficient Scan, power-of-two");
+	//StreamCompaction::SharedMem::scan(8, c, radix_tst);
+	//printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	//printArray(8, c, true);
+
+	//zeroArray(SIZE, c);
+	//printDesc("Shared Memory Efficient Scan, non-power-of-two");
+	//StreamCompaction::SharedMem::scan(7, c, radix_tst);
+	//printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
+	//printArray(7, c, true);
 
     printf("\n");
     printf("*****************************\n");

@@ -6,7 +6,7 @@ namespace StreamCompaction {
     namespace SharedMem {
         StreamCompaction::Common::PerformanceTimer& timer();
 
-		__global__ void kernScanDataShared(int n, int* in, int* out);
+		__global__ void kernScanDataShared(int n, int* in, int* out, int* sums);
 
         void scan(int n, int *odata, const int *idata);
 
