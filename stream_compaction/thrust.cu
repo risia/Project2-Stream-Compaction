@@ -19,11 +19,11 @@ namespace StreamCompaction {
          */
         void scan(int n, int *odata, const int *idata) {
 			thrust::host_vector<int> host_thrust_in(idata, idata + n);
-			thrust::host_vector<int> host_thrust_out(odata, odata + n);
 
-			thrust::device_vector<int> dev_thrust_in = host_thrust_in;
-			thrust::device_vector<int> dev_thrust_out = host_thrust_out;
+			thrust::device_vector<int> dev_thrust_in(n);
+			thrust::device_vector<int> dev_thrust_out(n);
 
+			thrust::copy(host_thrust_in.begin(), host_thrust_in.end(), dev_thrust_in.begin());
 
             timer().startGpuTimer();
 

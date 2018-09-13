@@ -43,6 +43,7 @@ namespace StreamCompaction {
 			int limit = ilog2ceil(n);
 			int size = pow(2, limit);
 
+
 			dim3 fullBlocksPerGrid((size + blockSize - 1) / blockSize);
 
 			// allocate memory
@@ -61,11 +62,16 @@ namespace StreamCompaction {
 			int offset1;
 			int offset2;
 
+			int threads;
+
 			// UpSweep
 			for (d = 1; d <= limit; d++) {
 				offset1 = pow(2, d - 1);
 				offset2 = pow(2, d);
-				fullBlocksPerGrid.x = ((size/offset2) + blockSize) / blockSize;
+
+				threads = (size / offset2);
+				fullBlocksPerGrid.x = (threads / blockSize) + 1;
+
 				kernScanDataUpSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_buf);
 				checkCUDAError("upsweep fail!");
 			}
@@ -75,7 +81,10 @@ namespace StreamCompaction {
 			for (d = limit; d >= 1; d--) {
 				offset1 = pow(2, d - 1);
 				offset2 = pow(2, d);
-				fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
+
+				threads = (size / offset2);
+				fullBlocksPerGrid.x = (threads / blockSize) + 1;
+
 				kernScanDataDownSweep << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, dev_buf);
 				checkCUDAError("downsweep fail!");
 			}
