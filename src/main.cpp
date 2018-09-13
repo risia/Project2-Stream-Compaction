@@ -107,17 +107,17 @@ int main(int argc, char* argv[]) {
 	printf("max = %i\n", max);
 
 	zeroArray(SIZE, c);
-	int radix_tst[8] = { 4, 7, 2, 6, 3, 5, 1, 0 };
+	//int radix_tst[8] = { 4, 7, 2, 6, 3, 5, 1, 0 };
 	printDesc("Radix sort, power-of-two");
-	StreamCompaction::Radix::sort(8, c, radix_tst);
+	StreamCompaction::Radix::sort(SIZE, c, a);
 	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-	printArray(8, c, true);
+	printArray(SIZE, c, true);
 
 	zeroArray(SIZE, c);
 	printDesc("Radix sort, non-power-of-two");
-	StreamCompaction::Radix::sort(7, c, radix_tst);
+	StreamCompaction::Radix::sort(NPOT, c, a);
 	printElapsedTime(StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
-	printArray(7, c, true);
+	printArray(NPOT, c, true);
 
 
 
