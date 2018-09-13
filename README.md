@@ -6,10 +6,11 @@ CUDA Stream Compaction
 * Angelina Risi
   * [LinkedIn](www.linkedin.com/in/angelina-risi)
 * Tested on: Windows 10, i7-6700HQ @ 2.60GHz 8GB, GTX 960M 4096MB (Personal Laptop)
+  
+  
+## Extra Credit
 
-### (TODO: Your README)
-
-**Radix Sort Implementation**
+### Radix Sort Implementation
 
 Radix sort is a method of sorting data in an array from min to max using the values' binary data. This is done by sorting by the least-significant bit (LSB) first, iterating through bit sorts until the most-significant bit (MSB).  
 Before we can sort, we actually need to find the dataset's maximum value. By taking the ceiling of log<sub>2</sub>(max), we can get the max number of bits representing the data, which bit is the MSB. This reduces the number of redundant iterations of sorting from the number of bits in the data type to only as many relevant ones there are in the data range. This is done on the GPU using a parallel reduction algorithm comparing pairs of values. The code is reproduced below with extra commentary.  
@@ -77,3 +78,10 @@ __global__ void kernRadixScatter(int n, int *out, int *in, int *b_arr, int *f_ar
 
 Once the input array has been sorted for each bit, the output is correctly sorted in order of ascending value. This implementation is intended to work on integer values, and currently operates on global device memory, bottlenecking performance. An example of a small array radix sort is depicted:
 ![Radix Sort Example](/img/radix_example.PNG)
+  
+  
+### Shared Memory Work-Efficient Scan & Compact
+  
+An alternative implementation of the work-efficient scan using shared memory to reduce latency is included. Each block stores an array shared among its threads to store the intermediate values before outputting. By reducing global memory accesses and instead using faster shared memory, we can potentially increase thoroughput.   
+Both the upsweep and downsweep are done in the same kernel as they need to both used the shared memory cache. This means we cannot dynamically change the block and threadcount as we traverse the tree as done in the global memory solution, and we must be careful to synchronize threads between write and read operations to prevent race conditions.   
+To allow the merging of the blocks' solutions, while we calculate an exclusive scan through the downsweep, we save the root value of the tree in the index blockSize of the shared memory array. The blocks must add the root value of all previous blocks to their total to calculate the correct prefix sum values of the array.  
