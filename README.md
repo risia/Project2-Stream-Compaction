@@ -88,26 +88,48 @@ Once the input array has been sorted for each bit, the output is correctly sorte
   
 ### Shared Memory Work-Efficient Scan & Compact
   
-An alternative implementation of the work-efficient scan using shared memory to reduce latency is included. Each block stores an array shared among its threads to store the intermediate values before outputting. By reducing global memory accesses and instead using faster shared memory, we can potentially increase thoroughput.   
-Both the upsweep and downsweep are done in the same kernel as they need to both used the shared memory cache. This means we cannot dynamically change the block and threadcount as we traverse the tree as done in the global memory solution, and we must be careful to synchronize threads between write and read operations to prevent race conditions. Each block essentially performs a scan on a portion of the input data.  
+An alternative implementation of the work-efficient scan using shared memory to reduce latency is included. Each block stores an array shared among its threads to store the intermediate values before outputting. By reducing global memory accesses and instead using faster shared memory, we can potentially increase thoroughput. Additionally, rather than increasing the scan buffer size to a power of two we need only increase it to a multiple of the buffer size.
+Both the upsweep and downsweep are done in the same kernel as they need to both used the shared memory cache. This means we cannot dynamically change the block and threadcount as we traverse the tree as done in the global memory solution, and we must be careful to synchronize threads between write and read operations to prevent race conditions. Each block essentially performs a scan on a portion of the input data. The depth level (required level of looping) of this scan is log<sub>2</sub>(blockSize). While there is some overhead described below that makes the depth comparable to log<sub>2</sub>(n), the reduced memory latency in this portion of the scan should provide improvement over the global memory equivalent.
 To allow the merging of the blocks' solutions, while we calculate an exclusive scan through the downsweep, we save the root value of the tree in the index blockSize of the shared memory array. 
-The blocks must add the root value of all previous blocks to their total to calculate the correct prefix sum values of the array. A second kernel call to do this to stitch together the blocks into the full exclusive scan is used to ensure all blocks have written their data to the device output buffers before attempting to fetch it.  
+The blocks must add the root value of all previous blocks to their total to calculate the correct prefix sum values of the array. This requires a second scan over all the blocks sums. To simplify the problem of having to recursively scan and stitch together blocks of data for large input data sets, instead of doing a shared memory scan for the second scan, the Work-Efficient scan using global memory was used. This second data set should be much smaller than the first, keeping the extra compute overhead minimal, as log<sub>2</sub>(n / blockSize) = log<sub>2</sub>(n) - log<sub>2</sub>(blockSize) depth level in this scan.
+Once the root sums were scanned, the outputs of both scans we put through a kernel call to stitch together the block data correctly by adding the correct sum value to each of the original output's values. This requires only a simple parallel addition.
   
 ```cpp
 __global__ void kernStitch(int n, int* in, int* sums) {
-   int bx = blockIdx.x;
-   int index = (blockDim.x * bx) + threadIdx.x;;
+			int bx = blockIdx.x;
+			int index = (blockDim.x * bx) + threadIdx.x;;
 
-   if (bx == 0) return;
-   if (index >= n) return;
-   for (int i = 0; i < bx; i++) {
-      in[index] += sums[i];
-   }
+			if (bx == 0) return;
+			if (index >= n) return;
+			in[index] += sums[bx];
 }
 ```  
 #### Bank Conflict Avoidance  
   
-This algorithm is further improved by using offsets on the shared memory access iterators to reduce bank conflicts, events where multiple threads attempt to access a region of shared memory at the same time and thus must wait for the bus to become free. This is done by applying macros to calculate the offset on the index based on the assumed number of memory banks. These are taken from the example code in GPU Gems 3 Ch. 39 linked in the instructions.
+This shared memory scan algorithm is further improved by using offsets on the shared memory access iterators to reduce bank conflicts, events where multiple threads attempt to access a region of shared memory at the same time and must wait for the bus to become free. This is done by applying macros to calculate an offset on the shared memory index based on the assumed number of memory banks. These are taken from the example code in GPU Gems 3 Ch. 39 linked in the instructions. The offset macro is reproduced below, as is example code of its use from my scan function.
+
+```cpp
+// for reducing bank conflicts
+#define NUM_BANKS 16 // Number of memory banks assumed on SM
+#define LOG_NUM_BANKS 4 // log2(NUM_BANKS)
+#define CONFLICT_FREE_OFFSET(n) \
+    ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS)) 
+    // Offset added to each shared memory index so that more threads accesses through diff bank
+    // so fewer must wait in line to use the same memory bus (thus less latency)
+```
+```cpp
+// Upsweep
+for (offset = 1; offset < blockSize; offset *=2) { // this offset is for calculating the original indices
+    access = (2 * offset * (tx + 1)) - 1; // index of shared memory to access
+    a2 = access - offset; // secondary access index
+    
+    a2 += CONFLICT_FREE_OFFSET(a2); // add safe offset to access index
+    access += CONFLICT_FREE_OFFSET(access); // add safe offset to access index
+    
+    if (access < blockSize) sBuf[access] += sBuf[a2]; // manipulate data at offset indices
+    __syncthreads(); // avoid mem issues
+}
+```
   
   
 ## Performance Analysis  
