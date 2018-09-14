@@ -25,27 +25,27 @@ Before we can sort, we actually need to find the dataset's maximum value. By tak
 // each thread compares a pair of integers from the input buffer 
 // and selects the greater of the two
 __global__ void kernFindMax(int n, int offset1, int offset2, int* buff) {
-   int index = (blockDim.x * blockIdx.x) + threadIdx.x;
+    int index = (blockDim.x * blockIdx.x) + threadIdx.x;
    
-   // compute which index to compare
-   int access = index * offset2 - 1;
-   if (access >= n || n < 1 || access < 0) return;
+    // compute which index to compare
+    int access = index * offset2 - 1;
+    if (access >= n || n < 1 || access < 0) return;
 
-   // modify in place
-   if (buff[access] < buff[access - offset1]) {
-   buff[access] = buff[access - offset1];
-   }
+    // modify in place
+    if (buff[access] < buff[access - offset1]) {
+    buff[access] = buff[access - offset1];
+    }
 }
 ```
 ```cpp
 // The loop iterates deeper into the reduction until the final max value is sorted to the end
 // This essentially sweeps the max value up to the root of a balanced binary tree
 for (d = 1; d <= limit; d++) {
-   offset1 = pow(2, d - 1);
-   offset2 = pow(2, d);
-   fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
-   kernFindMax << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, max_arr);
-   checkCUDAError("Radix find max fail!"); // error checking
+    offset1 = pow(2, d - 1);
+    offset2 = pow(2, d);
+    fullBlocksPerGrid.x = ((size / offset2) + blockSize) / blockSize;
+    kernFindMax << <fullBlocksPerGrid, blockSize >> >(size, offset1, offset2, max_arr);
+    checkCUDAError("Radix find max fail!"); // error checking
 }
 ```  
   
@@ -53,16 +53,16 @@ To perform the sort itself efficiently, we generate a a pair of boolean buffers 
   
 ```cpp
 __global__ void kernBoolMaps(int n, int k, int* input, int* b_arr, int* f_arr) {
-   int index = (blockDim.x * blockIdx.x) + threadIdx.x;
-   if (index >= n) return;
+    int index = (blockDim.x * blockIdx.x) + threadIdx.x;
+    if (index >= n) return;
  
-   // retrieve the kth bit from the input val
-   int bit = bitK(input[index], k);
-   // flip the bit
-   int fBit = flipBit(bit);
+    // retrieve the kth bit from the input val
+    int bit = bitK(input[index], k);
+    // flip the bit
+    int fBit = flipBit(bit);
 
-   b_arr[index] = bit; // maps bit k into b_arr
-   f_arr[index] = fBit; // copy flipped value here for scan
+    b_arr[index] = bit; // maps bit k into b_arr
+    f_arr[index] = fBit; // copy flipped value here for scan
 }
 ```  
   
@@ -70,15 +70,15 @@ The f_arr is scanned using the work-efficient exclusive scan to generate the "fa
   
 ```cpp
 __global__ void kernRadixScatter(int n, int *out, int *in, int *b_arr, int *f_arr, int *t_arr) {
-   int index = (blockDim.x * blockIdx.x) + threadIdx.x;
-   if (index >= n) return;
+    int index = (blockDim.x * blockIdx.x) + threadIdx.x;
+    if (index >= n) return;
    
-   // We compute the index to access by checking the boolean in b_arr
-   // If true, we use the index in t_arr (true indexing array)
-   // Else, we choose the index in f_arr (false indexing array)
-   // The index "access" is where in the output array the input goes to.
-   int access = b_arr[index] ? t_arr[index] : f_arr[index];
-   out[access] = in[index];
+    // We compute the index to access by checking the boolean in b_arr
+    // If true, we use the index in t_arr (true indexing array)
+    // Else, we choose the index in f_arr (false indexing array)
+    // The index "access" is where in the output array the input goes to.
+    int access = b_arr[index] ? t_arr[index] : f_arr[index];
+    out[access] = in[index];
 }
 ```
 
@@ -96,12 +96,12 @@ Once the root sums were scanned, the outputs of both scans we put through a kern
   
 ```cpp
 __global__ void kernStitch(int n, int* in, int* sums) {
-			int bx = blockIdx.x;
-			int index = (blockDim.x * bx) + threadIdx.x;;
+    int bx = blockIdx.x;
+    int index = (blockDim.x * bx) + threadIdx.x;;
 
-			if (bx == 0) return;
-			if (index >= n) return;
-			in[index] += sums[bx];
+    if (bx == 0) return;
+    if (index >= n) return;
+    in[index] += sums[bx];
 }
 ```  
 #### Bank Conflict Avoidance  
