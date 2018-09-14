@@ -9,7 +9,7 @@ CUDA Stream Compaction
 
 ## Project Description  
   
-This project implements a variety of scan, compact and sort algorithms on the GPU with some comparison tests implemented on the CPU. The base requirements were to implement CPU Scan and Compact Functions, and to implement GPU Naive Scan and Compact and GPU Work-Efficient Scan and Compact. I also created a wrapper function for the Thrust scan implementation on the GPU.
+This project implements a variety of scan, compact and sort algorithms on the GPU with some comparison tests implemented on the CPU. The base requirements were to implement CPU Scan and Compact Functions, and to implement GPU Naive Scan and Compact and GPU Work-Efficient Scan and Compact. I also created a wrapper function for the Thrust scan implementation on the GPU.  
 In addition to these base requirements, I implemented all the defined extra credit assignments. These were Radix sort, using shared GPU memory in the scan implementation, implementing memory bank conflict avoidance, and improving the work-efficient implementation's efficiency over the CPU implementation.  
   
 ### Features
@@ -82,17 +82,17 @@ __global__ void kernRadixScatter(int n, int *out, int *in, int *b_arr, int *f_ar
 }
 ```
 
-Once the input array has been sorted for each bit, the output is correctly sorted in order of ascending value. This implementation is intended to work on integer values, and currently operates on global device memory, bottlenecking performance. An example of a small array radix sort is depicted:
+Once the input array has been sorted for each bit, the output is correctly sorted in order of ascending value. This implementation is intended to work on integer values, and currently operates on global device memory, bottlenecking performance. An example of a small array radix sort is depicted:  
 ![Radix Sort Example](/img/radix_example.PNG)
   
   
-### Shared Memory Work-Efficient Scan & Compact
+### Shared Memory Work-Efficient Scan
   
-An alternative implementation of the work-efficient scan using shared memory to reduce latency is included. Each block stores an array shared among its threads to store the intermediate values before outputting. By reducing global memory accesses and instead using faster shared memory, we can potentially increase thoroughput. Additionally, rather than increasing the scan buffer size to a power of two we need only increase it to a multiple of the buffer size.
-Both the upsweep and downsweep are done in the same kernel as they need to both used the shared memory cache. This means we cannot dynamically change the block and threadcount as we traverse the tree as done in the global memory solution, and we must be careful to synchronize threads between write and read operations to prevent race conditions. Each block essentially performs a scan on a portion of the input data. The depth level (required level of looping) of this scan is log<sub>2</sub>(blockSize). While there is some overhead described below that makes the depth comparable to log<sub>2</sub>(n), the reduced memory latency in this portion of the scan should provide improvement over the global memory equivalent.
-To allow the merging of the blocks' solutions, while we calculate an exclusive scan through the downsweep, we save the root value of the tree in the index blockSize of the shared memory array. 
-The blocks must add the root value of all previous blocks to their total to calculate the correct prefix sum values of the array. This requires a second scan over all the blocks sums. To simplify the problem of having to recursively scan and stitch together blocks of data for large input data sets, instead of doing a shared memory scan for the second scan, the Work-Efficient scan using global memory was used. This second data set should be much smaller than the first, keeping the extra compute overhead minimal, as log<sub>2</sub>(n / blockSize) = log<sub>2</sub>(n) - log<sub>2</sub>(blockSize) depth level in this scan.
-Once the root sums were scanned, the outputs of both scans we put through a kernel call to stitch together the block data correctly by adding the correct sum value to each of the original output's values. This requires only a simple parallel addition.
+An alternative implementation of the work-efficient scan using shared memory to reduce latency is included. Each block stores an array shared among its threads to store the intermediate values before outputting. By reducing global memory accesses and instead using faster shared memory, we can potentially increase thoroughput. Additionally, rather than increasing the scan buffer size to a power of two we need only increase it to a multiple of the buffer size.  
+Both the upsweep and downsweep are done in the same kernel as they need to both used the shared memory cache. This means we cannot dynamically change the block and threadcount as we traverse the tree as done in the global memory solution, and we must be careful to synchronize threads between write and read operations to prevent race conditions. Each block essentially performs a scan on a portion of the input data. The depth level (required level of looping) of this scan is log<sub>2</sub>(blockSize). While there is some overhead described below that makes the depth comparable to log<sub>2</sub>(n), the reduced memory latency in this portion of the scan should provide improvement over the global memory equivalent.  
+To allow the merging of the blocks' solutions, while we calculate an exclusive scan through the downsweep, we save the root value of the tree in the index blockSize of the shared memory array.  
+The blocks must add the root value of all previous blocks to their total to calculate the correct prefix sum values of the array. This requires a second scan over all the blocks sums. To simplify the problem of having to recursively scan and stitch together blocks of data for large input data sets, instead of doing a shared memory scan for the second scan, the Work-Efficient scan using global memory was used. This second data set should be much smaller than the first, keeping the extra compute overhead minimal, as log<sub>2</sub>(n / blockSize) = log<sub>2</sub>(n) - log<sub>2</sub>(blockSize) depth level in this scan.  
+Once the root sums were scanned, the outputs of both scans we put through a kernel call to stitch together the block data correctly by adding the correct sum value to each of the original output's values. This requires only a simple parallel addition.  
   
 ```cpp
 __global__ void kernStitch(int n, int* in, int* sums) {
@@ -106,7 +106,7 @@ __global__ void kernStitch(int n, int* in, int* sums) {
 ```  
 #### Bank Conflict Avoidance  
   
-This shared memory scan algorithm is further improved by using offsets on the shared memory access iterators to reduce bank conflicts, events where multiple threads attempt to access a region of shared memory at the same time and must wait for the bus to become free. This is done by applying macros to calculate an offset on the shared memory index based on the assumed number of memory banks. These are taken from the example code in GPU Gems 3 Ch. 39 linked in the instructions. The offset macro is reproduced below, as is example code of its use from my scan function.
+This shared memory scan algorithm is further improved by using offsets on the shared memory access iterators to reduce bank conflicts, events where multiple threads attempt to access a region of shared memory at the same time and must wait for the bus to become free. This is done by applying macros to calculate an offset on the shared memory index based on the assumed number of memory banks. These are taken from the example code in GPU Gems 3 Ch. 39 linked in the instructions. The offset macro is reproduced below, as is example code of its use from my scan function.  
 
 ```cpp
 // for reducing bank conflicts
@@ -133,4 +133,14 @@ for (offset = 1; offset < blockSize; offset *=2) { // this offset is for calcula
   
   
 ## Performance Analysis  
+
+To get a rough estimate on the advantages of performance of each method, a loop was added to the main function to generate an array, run  each scan and compact algorithm, and measure the time it took to run. This loop repeats 100 times and the average timing data is output after. By running this analysis for different block sizes and data set sizes, we can approximate performance in each case. The radix sort performance is also tested, but is not meant to be compared with the others due to performing a very different function.
+
+### Varying Block Size  
+  
+The performance was first tested on a set of data with 2<sup>15</sup> (32,768) integer values (minus 3 for the non-power-of-two test). The block size was varied at powers of 2 from 32 (the reasonable minimum, the warp size) to 1024 (the max threads per block of this GPU).
+
+### Varying Data Set Sizes  
+
+Once the algorithms' block sizes were optimized, they could be tested for varying data set sizes. The data size was swept through powers of two from 2<sup>6</sup> (64) to 2<sup>22</sup> (4,194,304) for completeness in examining small to large data sets.
 
