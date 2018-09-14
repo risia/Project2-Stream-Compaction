@@ -15,7 +15,7 @@
 #include <stream_compaction/shared_mem.h>
 #include "testing_helpers.hpp"
 
-const int SIZE = 1000000; // feel free to change the size of array
+const int SIZE = 1 << 15; // feel free to change the size of array
 const int NPOT = SIZE - 3; // Non-Power-Of-Two
 int *a = new int[SIZE];
 int *b = new int[SIZE];
@@ -223,6 +223,147 @@ int main(int argc, char* argv[]) {
 	printElapsedTime(StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation(), "(CUDA Measured)");
 	//printArray(count, c, true);
 	printCmpLenResult(count, expectedNPOT, b, c);
+
+
+	// loop 100 tests to get avgs
+	// make time variables
+	float time_N_S_POT = 0.0f; // naive pow 2 scan
+	float time_N_S_NPOT = 0.0f; // naive not pow 2 scan
+	float time_WE_S_POT = 0.0f; //
+	float time_WE_S_NPOT = 0.0f; //
+	float time_WE_C_POT = 0.0f; //
+	float time_WE_C_NPOT = 0.0f; //
+	float time_SM_S_POT = 0.0f; //
+	float time_SM_S_NPOT = 0.0f; //
+	float time_T_S_POT = 0.0f; //
+	float time_T_S_NPOT = 0.0f; //
+	float time_R_S_POT = 0.0f; //
+	float time_R_S_NPOT = 0.0f; //
+	float time_CPU_S_POT = 0.0f;
+	float time_CPU_S_NPOT = 0.0f;
+	float time_CPU_C_S = 0.0f;
+	float time_CPU_C_NS = 0.0f;
+	float time_CPU_C_S_NPOT = 0.0f;
+	float time_CPU_C_NS_NPOT = 0.0f;
+
+	for (int i = 0; i < 100; i++) {
+		// gen array
+		genArray(SIZE - 1, a, 50);  // Leave a 0 at the end to test that edge case
+		a[SIZE - 1] = 0;
+
+		// cpu scan POT
+		zeroArray(SIZE, b);
+		StreamCompaction::CPU::scan(SIZE, b, a);
+		time_CPU_S_POT += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+		// cpu scan POT
+		zeroArray(SIZE, b);
+		StreamCompaction::CPU::scan(NPOT, b, a);
+		time_CPU_S_NPOT += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+		// cpu compact w/o scan
+		zeroArray(SIZE, b);
+		StreamCompaction::CPU::compactWithoutScan(SIZE, b, a);
+		time_CPU_C_NS += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+		// cpu compact w/o scan
+		zeroArray(SIZE, b);
+		StreamCompaction::CPU::compactWithoutScan(NPOT, b, a);
+		time_CPU_C_NS_NPOT += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+		// cpu compact w/ scan
+		zeroArray(SIZE, b);
+		StreamCompaction::CPU::compactWithScan(SIZE, b, a);
+		time_CPU_C_S += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+		// cpu compact w/ scan
+		zeroArray(SIZE, b);
+		StreamCompaction::CPU::compactWithScan(NPOT, b, a);
+		time_CPU_C_S_NPOT += StreamCompaction::CPU::timer().getCpuElapsedTimeForPreviousOperation();
+
+		// Naive scan POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Naive::scan(SIZE, b, a);
+		time_N_S_POT += StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// Naive scan N_POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Naive::scan(NPOT, b, a);
+		time_N_S_NPOT += StreamCompaction::Naive::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// WE scan POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Efficient::scan(SIZE, b, a);
+		time_WE_S_POT += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// WE scan N_POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Efficient::scan(NPOT, b, a);
+		time_WE_S_NPOT += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// WE compact POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Efficient::compact(SIZE, b, a);
+		time_WE_C_POT += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// WE compact N_POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Efficient::compact(NPOT, b, a);
+		time_WE_C_NPOT += StreamCompaction::Efficient::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// SM scan POT
+		zeroArray(SIZE, b);
+		StreamCompaction::SharedMem::scan(SIZE, b, a);
+		time_SM_S_POT += StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// SM scan N_POT
+		zeroArray(SIZE, b);
+		StreamCompaction::SharedMem::scan(NPOT, b, a);
+		time_SM_S_NPOT += StreamCompaction::SharedMem::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// Thrust scan POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Thrust::scan(SIZE, b, a);
+		time_T_S_POT += StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// Thrust scan N_POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Thrust::scan(NPOT, b, a);
+		time_T_S_NPOT += StreamCompaction::Thrust::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// Radix sort POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Radix::sort(SIZE, b, a);
+		time_R_S_POT += StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation();
+
+		// Radic sort N_POT
+		zeroArray(SIZE, b);
+		StreamCompaction::Radix::sort(NPOT, b, a);
+		time_R_S_NPOT += StreamCompaction::Radix::timer().getGpuElapsedTimeForPreviousOperation();
+
+	}
+
+	// print avg times
+	printf("CPU Scan POT: %f\n", time_CPU_S_POT / 100.0f);
+	printf("CPU Scan NPOT: %f\n", time_CPU_S_NPOT / 100.0f);
+	printf("CPU Compact POT: %f\n", time_CPU_C_NS / 100.0f);
+	printf("CPU Scan Compact NPOT: %f\n", time_CPU_C_S_NPOT / 100.0f);
+	printf("CPU Compact NPOT: %f\n", time_CPU_C_NS_NPOT / 100.0f);
+	printf("CPU Scan Compact POT: %f\n", time_CPU_C_S / 100.0f);
+	printf("Naive POT: %f\n", time_N_S_POT / 100.0f);
+	printf("Naive NPOT: %f\n", time_N_S_NPOT / 100.0f);
+	printf("WE Scan POT: %f\n", time_WE_S_POT / 100.0f);
+	printf("WE Scan NPOT: %f\n", time_WE_S_NPOT / 100.0f);
+	printf("WE Comp POT: %f\n", time_WE_C_POT / 100.0f);
+	printf("WE Comp NPOT: %f\n", time_WE_C_NPOT / 100.0f);
+	printf("SM Scan POT: %f\n", time_SM_S_POT / 100.0f);
+	printf("SM Scan NPOT: %f\n", time_SM_S_NPOT / 100.0f);
+	printf("Thrust Scan POT: %f\n", time_T_S_POT / 100.0f);
+	printf("Thrust Scan NPOT: %f\n", time_T_S_NPOT / 100.0f);
+	printf("Radix POT: %f\n", time_R_S_POT / 100.0f);
+	printf("Radix NPOT: %f\n", time_R_S_NPOT / 100.0f);
+
+
 
     system("pause"); // stop Win32 console from closing on exit
 	delete[] a;
