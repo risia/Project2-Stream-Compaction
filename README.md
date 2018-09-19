@@ -144,7 +144,7 @@ for (offset = 1; offset < blockSize; offset *=2) { // this offset is for calcula
   
 ## Test Output  
 
-'''
+```
 ****************
 ** SCAN TESTS **
 ****************
@@ -232,7 +232,7 @@ Sorted Output:
 ==== Shared Memory work-efficient compact, non-power-of-two ====
    elapsed time: 0.236352ms    (CUDA Measured)
     passed
-'''
+```
   
   
 ## Performance Analysis  
