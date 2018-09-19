@@ -110,8 +110,8 @@ This shared memory scan algorithm is further improved by using offsets on the sh
 
 ```cpp
 // for reducing bank conflicts
-#define NUM_BANKS 16 // Number of memory banks assumed on SM
-#define LOG_NUM_BANKS 4 // log2(NUM_BANKS)
+#define NUM_BANKS 32 // Number of memory banks assumed on SM
+#define LOG_NUM_BANKS 5 // log2(NUM_BANKS)
 #define CONFLICT_FREE_OFFSET(n) \
     ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS)) 
     // Offset added to each shared memory index so that more threads accesses through diff bank
@@ -129,7 +129,99 @@ for (offset = 1; offset < blockSize; offset *=2) { // this offset is for calcula
     if (access < blockSize) sBuf[access] += sBuf[a2]; // manipulate data at offset indices
     __syncthreads(); // avoid mem issues
 }
-```
+```  
+  
+## Test Output  
+
+'''
+****************
+** SCAN TESTS **
+****************
+    [  15  38  45  12  38  26   6  23  30   2  34  33   7 ...   1   0 ]
+==== cpu scan, power-of-two ====
+   elapsed time: 0.077432ms    (std::chrono Measured)
+    [   0  15  53  98 110 148 174 180 203 233 235 269 302 ... 809545 809546 ]
+==== cpu scan, non-power-of-two ====
+   elapsed time: 0.058864ms    (std::chrono Measured)
+    [   0  15  53  98 110 148 174 180 203 233 235 269 302 ... 809458 809482 ]
+    passed
+==== naive scan, power-of-two ====
+   elapsed time: 0.099264ms    (CUDA Measured)
+    [   0  15  53  98 110 148 174 180 203 233 235 269 302 ... 809545 809546 ]
+    passed
+==== naive scan, non-power-of-two ====
+   elapsed time: 0.098816ms    (CUDA Measured)
+    passed
+==== work-efficient scan, power-of-two ====
+   elapsed time: 0.164352ms    (CUDA Measured)
+    [   0  15  53  98 110 148 174 180 203 233 235 269 302 ... 809545 809546 ]
+    passed
+==== work-efficient scan, non-power-of-two ====
+   elapsed time: 0.156096ms    (CUDA Measured)
+    [   0  15  53  98 110 148 174 180 203 233 235 269 302 ... 809458 809482 ]
+    passed
+==== thrust scan, power-of-two ====
+   elapsed time: 0.57184ms    (CUDA Measured)
+    passed
+==== thrust scan, non-power-of-two ====
+   elapsed time: 0.29728ms    (CUDA Measured)
+    passed
+==== Find max, power-of-two ====
+   elapsed time: 0.059936ms    (CUDA Measured)
+max = 49
+==== Find max, non-power-of-two ====
+   elapsed time: 0.05984ms    (CUDA Measured)
+max = 49
+==== Radix sort, power-of-two ====
+   elapsed time: 2.60947ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ...  49  49 ]
+==== Radix sort, non-power-of-two ====
+   elapsed time: 2.29824ms    (CUDA Measured)
+    [   0   0   0   0   0   0   0   0   0   0   0   0   0 ...  49  49 ]
+==== Radix example sort ====
+Test input array:
+    [   4   7   2   6   3   5   1   0 ]
+   elapsed time: 0.464576ms    (CUDA Measured)
+Sorted Output:
+    [   0   1   2   3   4   5   6   7 ]
+==== Shared Memory Efficient Scan, power-of-two ====
+   elapsed time: 0.0904ms    (CUDA Measured)
+    [   0  15  53  98 110 148 174 180 203 233 235 269 302 ... 809545 809546 ]
+    passed
+==== Shared Memory Efficient Scan, non-power-of-two ====
+   elapsed time: 0.11568ms    (CUDA Measured)
+    [   0  15  53  98 110 148 174 180 203 233 235 269 302 ... 809458 809482 ]
+    passed
+
+*****************************
+** STREAM COMPACTION TESTS **
+*****************************
+    [   1   0   3   3   2   3   1   0   3   0   0   3   2 ...   2   0 ]
+==== cpu compact without scan, power-of-two ====
+   elapsed time: 0.116543ms    (std::chrono Measured)
+    [   1   3   3   2   3   1   3   3   2   1   3   3   2 ...   1   2 ]
+    passed
+==== cpu compact without scan, non-power-of-two ====
+   elapsed time: 0.132346ms    (std::chrono Measured)
+    [   1   3   3   2   3   1   3   3   2   1   3   3   2 ...   2   2 ]
+    passed
+==== cpu compact with scan ====
+   elapsed time: 0.390321ms    (std::chrono Measured)
+    [   1   3   3   2   3   1   3   3   2   1   3   3   2 ...   1   2 ]
+    passed
+==== work-efficient compact, power-of-two ====
+   elapsed time: 0.171744ms    (CUDA Measured)
+    passed
+==== work-efficient compact, non-power-of-two ====
+   elapsed time: 0.192384ms    (CUDA Measured)
+    passed
+==== Shared Memory work-efficient compact, power-of-two ====
+   elapsed time: 0.234592ms    (CUDA Measured)
+    passed
+==== Shared Memory work-efficient compact, non-power-of-two ====
+   elapsed time: 0.236352ms    (CUDA Measured)
+    passed
+'''
   
   
 ## Performance Analysis  
@@ -159,5 +251,15 @@ The Radix sort appears most efficient at 128 or 256 threads per block. Since the
 
 ### Varying Data Set Sizes  
 
-Once the algorithms' block sizes were optimized, they could be tested for varying data set sizes. The data size was swept through powers of two from 2<sup>6</sup> (64) to 2<sup>22</sup> (4,194,304) for completeness in examining small to large data sets.
+Once the algorithms' block sizes were optimized, they could be tested for varying data set sizes. The data size was swept through powers of two from 2<sup>6</sup> (64) to 2<sup>22</sup> (4,194,304) for completeness in examining small to large data sets.  
+  
+![Scan Comparison 1](img/scan_comp1.PNG) ![Scan Comparison 2](img/scan_comp2.PNG)  
+  
+The scan algorithms were first compared. The plots demonstrate that the CPU implementation is actually significantly faster at first, but is overtaken by all the GPU implementations around an array size of 2<sup>18</sup>. This is due to the CPU scan scaling directly with array size, while GPU implementations mitigate this with parallelism. Interesting to note is a sudden jump in thrust scan time at 2<sup>15</sup>, but much slower time scaling otherwise. This is assumed to be due to how thrust optimizes scan processing or allocates the arrays. The work efficient scan is actually slower than the naive scan as well, but the shared memory work-efficient scan is faster than naive, and it eventually is faster than naive scan at larger array sizes.
+  
+![Compact Comparison 1](img/compact_comp1.PNG) ![Compact Comparison 2](img/compact_comp2.PNG)  
+
+Compation was implemented on the CPU with and without scanning and on the GPU with the work efficient scan. The CPU compact without scanning requires less computation and is thus very fast. The GPU manages to become faster than the CPU at an array size of 2<sup>19</sup>, when the array size is large enough that iterating over each index is slower than the parallel GPU map, scan, and scatter algorithm.  
+  
+These analyses show that unless properly optimized, the CPU can be faster than the GPU on small enough data sets with simple enough computations.
 
