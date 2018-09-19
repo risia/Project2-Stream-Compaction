@@ -272,7 +272,7 @@ The scan algorithms were first compared. The plots demonstrate that the CPU impl
 
 Compation was implemented on the CPU with and without scanning and on the GPU with the work efficient scan. The CPU compact without scanning requires less computation and is thus very fast. The GPU manages to become faster than the CPU at an array size of 2<sup>19</sup>, when the array size is large enough that iterating over each index is slower than the parallel GPU map, scan, and scatter algorithm.  
   
-These analyses show that unless properly optimized, the CPU can be faster than the GPU on small enough data sets with simple enough computations.
+These analyses show that unless properly optimized, the CPU can be faster than the GPU on small enough data sets with simple enough computations. Global memory access latency, idle threads, inefficient branching, etc. in the GPU implementations can cause great decreases in thoroughput, and with more time and effort could be further reduced. The comparison with the thrust implementation shows there are more optimizations to be applied. But, we still find use of even naive implementations on large enough data sets. For example, many modern laptop screens have 1920 x 1080 resolution, over 2 million pixels, making parallel GPU computations significantly more efficient.  
 
 All performance data recorded can be found in the Performance Analysis excel file [here](https://github.com/risia/Project2-Stream-Compaction/blob/master/Project2%20Performance%20Analysis.xlsx).
 
