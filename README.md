@@ -21,7 +21,7 @@ In addition to these base requirements, I implemented all the defined extra cred
 * GPU "Work-Efficient" Scan  
   - Including Shared Memory implementation (Extra Credit) w/ Bank Conflict resolution  
 * GPU Stream Compaction  
-  - Using Work-efficient scan, but can we replaced with other scan algorithms  
+  - Using Work-efficient scan, but can be replaced with other scan algorithms  
 * GPU Radix Sort (Extra Credit)  
   
   
