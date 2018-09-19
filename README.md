@@ -274,3 +274,5 @@ Compation was implemented on the CPU with and without scanning and on the GPU wi
   
 These analyses show that unless properly optimized, the CPU can be faster than the GPU on small enough data sets with simple enough computations.
 
+All performance data recorded can be found in the Performance Analysis excel file [here](https://github.com/risia/Project2-Stream-Compaction/blob/master/Project2%20Performance%20Analysis.xlsx).
+
