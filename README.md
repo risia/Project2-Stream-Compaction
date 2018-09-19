@@ -12,7 +12,18 @@ CUDA Stream Compaction
 This project implements a variety of scan, compact and sort algorithms on the GPU with some comparison tests implemented on the CPU. The base requirements were to implement CPU Scan and Compact Functions, and to implement GPU Naive Scan and Compact and GPU Work-Efficient Scan and Compact. I also created a wrapper function for the Thrust scan implementation on the GPU.  
 In addition to these base requirements, I implemented all the defined extra credit assignments. These were Radix sort, using shared GPU memory in the scan implementation, implementing memory bank conflict avoidance, and improving the work-efficient implementation's efficiency over the CPU implementation.  
   
-### Features
+### Features  
+  
+* CPU Scan  
+* CPU Compact  
+  - With and without scanning  
+* GPU Naive Scan  
+* GPU "Work-Efficient" Scan  
+  - Including Shared Memory implementation (Extra Credit) w/ Bank Conflict resolution  
+* GPU Stream Compaction  
+  - Using Work-efficient scan, but can we replaced with other scan algorithms  
+* GPU Radix Sort (Extra Credit)  
+  
   
 ## Extra Credit
 
