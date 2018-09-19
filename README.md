@@ -138,7 +138,24 @@ To get a rough estimate on the advantages of performance of each method, a loop 
 
 ### Varying Block Size  
   
-The performance was first tested on a set of data with 2<sup>15</sup> (32,768) integer values (minus 3 for the non-power-of-two test). The block size was varied at powers of 2 from 32 (the reasonable minimum, the warp size) to 1024 (the max threads per block of this GPU).
+The performance was first tested on a set of data with 2<sup>15</sup> (32,768) integer values (minus 3 for the non-power-of-two test). The block size was varied at powers of 2 from 32 (the reasonable minimum, the warp size) to 1024 (the max threads per block of this GPU). This performance test was to decide on an optimal blocksize for testing these algorithms against the CPU scan and compact algorithms. We do not test Thrust in this manner as we only wrap its implementation.
+
+![Naive Scan](img/naive_blocksize.PNG) ![Shared Memory Scan](img/sm_scan_blocksize.PNG)  
+  
+![Work-Efficient Scan](img/we_scan_blocksize.PNG) ![Work-Efficient Compact](img/we_compact_blocksize.PNG)  
+  
+The average time to execute varies slightly between runs, but we can approximate the optimal blocksize from which size gives te shortest execution times on average. For some, the difference is minimal, making it difficult to choose, but the final selection is as follows:  
+  
+* Naive Scan: 256
+* Work-Efficient Scan: 64
+* Shared Memory Scan: 512
+
+The larger block size for the shared memory scan is likely more efficient due to both sharing memory across more threads and fewer total blocks to stitch together, reducing the latency from the secondary scan on block sums. In contrast, the work-efficient scan is most efficient for smaller block sizes. This may be due to the simplicity of the kernels and the decreasing number of active blocks per iteration allowing better thoroughput with smaller threadcounts per block.
+  
+![Radix Sort](img/radix_blocksize.PNG)  
+  
+The Radix sort appears most efficient at 128 or 256 threads per block. Since the average between power-of-two and non-power-of-two array speeds is better for an array of size 128, this value is chosen.  
+  
 
 ### Varying Data Set Sizes  
 
