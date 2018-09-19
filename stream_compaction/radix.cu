@@ -2,7 +2,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#define blockSize 256
+#define blockSize 128
 
 // macros for bit checks and toggles
 // define macro to get nth bit of int

@@ -4,11 +4,11 @@
 #include "efficient.h"
 #include "shared_mem.h"
 
-#define blockSize 128
+#define blockSize 512
 
 // for reducing bank conflicts
-#define NUM_BANKS 16
-#define LOG_NUM_BANKS 4
+#define NUM_BANKS 32
+#define LOG_NUM_BANKS 5
 #define CONFLICT_FREE_OFFSET(n) \
     ((n) >> NUM_BANKS + (n) >> (2 * LOG_NUM_BANKS))
 
